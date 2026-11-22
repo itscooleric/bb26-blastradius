@@ -651,9 +651,22 @@ def _eqv_norm(tree):
     return ast.dump(tree)
 
 
+def _swap_norm(line):
+    return line.replace(" is not ", " != ").replace(" is ", " == ")
+
+
 def _eqv_only(old_text, new_text):
     """True when the two modules differ only by '=='/'is' (or '!='/'is not') swaps
     whose other side is None or a sqlglot enum member: those behave the same."""
+    ol, nl = old_text.split("\n"), new_text.split("\n")
+    if len(ol) != len(nl):
+        return False
+    diff = [(x, y) for x, y in zip(ol, nl) if x != y]
+    if not diff or len(diff) > 8:
+        return False
+    for x, y in diff:
+        if _swap_norm(x) != _swap_norm(y):
+            return False
     try:
         a, b = ast.parse(old_text), ast.parse(new_text)
     except SyntaxError:

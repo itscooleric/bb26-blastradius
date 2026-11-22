@@ -7,6 +7,7 @@ by comparing ASTs), select the tests that ran that code at the pinned commit
 import ast
 import json
 import os
+import re
 import sys
 from pathlib import Path
 
@@ -998,6 +999,39 @@ def pack(numbers, dur):
     return best[1]
 
 
+# Long tests that our checks found failing only for core changes. Dropping them for
+# other changes is a bet: it saves their time, at the risk of a miss.
+DROP_GENMEM = True
+DROP_MAXNODES = False
+_GENMEM = "tests/test_generator.py::TestGenerator::test_generator_memory"
+_MAXNODES = "tests/test_parser.py::TestParser::test_max_nodes"
+_MAXNODES_KEEP = {"sqlglot/helper.py", "sqlglot/parser.py", "sqlglot/tokenizer_core.py",
+                  "sqlglot/tokens.py", "sqlglot/errors.py", "sqlglot/expressions/core.py",
+                  "sqlglot/__init__.py", "sqlglot/parsers/__init__.py"}
+
+
+def _changed_files(text):
+    return set(re.findall(r"^(?:\+\+\+ b|--- a)/(\S+)", text, re.M))
+
+
+def _dialect_only(files):
+    for f in files:
+        m = re.fullmatch(r"sqlglot/(dialects|generators|parsers)/(\w+)\.py", f)
+        if not m or m.group(2) in ("dialect", "__init__"):
+            return False
+    return bool(files)
+
+
+def _bet(text, chosen, num_of):
+    files = _changed_files(text)
+    drop = set()
+    if DROP_GENMEM and _dialect_only(files):
+        drop.add(num_of.get(_GENMEM))
+    if DROP_MAXNODES and files and not (files & _MAXNODES_KEEP):
+        drop.add(num_of.get(_MAXNODES))
+    return chosen - drop
+
+
 def main():
     tests = json.loads((DATA / "tests.json").read_text())["tests"]
     dur = {t["number"]: round(t["seconds"] * 1000) for t in tests}
@@ -1008,6 +1042,7 @@ def main():
     pos = {tid: i for i, tid in enumerate(ids)}
     known = [(pos[t["id"]], t["number"]) for t in tests if t["id"] in pos]
     unknown = {t["number"] for t in tests if t["id"] not in pos}
+    num_of = {t["id"]: t["number"] for t in tests}
     out = []
     for patch in sorted((DATA / "commits").glob("*.patch")):
         why = []
@@ -1017,6 +1052,7 @@ def main():
                 chosen = set(dur)
             else:
                 chosen = {num for i, num in known if bits >> i & 1} | unknown
+                chosen = _bet(patch.read_text(errors="replace"), chosen, num_of)
         except Exception as e:  # never fail the run: run everything
             why.append(f"error {e!r} -> all")
             chosen = set(dur)

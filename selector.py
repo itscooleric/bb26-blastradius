@@ -1002,7 +1002,7 @@ def pack(numbers, dur):
 # Long tests that our checks found failing only for core changes. Dropping them for
 # other changes is a bet: it saves their time, at the risk of a miss.
 DROP_GENMEM = True
-DROP_MAXNODES = False
+DROP_MAXNODES = True
 _GENMEM = "tests/test_generator.py::TestGenerator::test_generator_memory"
 _MAXNODES = "tests/test_parser.py::TestParser::test_max_nodes"
 _MAXNODES_KEEP = {"sqlglot/helper.py", "sqlglot/parser.py", "sqlglot/tokenizer_core.py",

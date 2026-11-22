@@ -622,6 +622,47 @@ DOC_SUFFIXES = (".md", ".rst", ".txt", ".png", ".gif", ".jpg", ".svg", ".jinja2"
 DOC_FILES = {"LICENSE", ".gitignore", ".gitpod.yml", ".pre-commit-config.yaml", "MANIFEST.in", "Makefile", "CHANGELOG.md"}
 
 
+_ENUMS = {"TrieResult", "IsPredicatePrecedence", "TokenType", "AutoName", "Dialects",
+          "NormalizationStrategy", "UsingColumnOrder", "AliasPrecedence", "DType",
+          "PropertiesLocation", "ScopeType", "ErrorLevel"}
+
+
+def _identity_safe(n):
+    if isinstance(n, ast.Constant) and n.value is None:
+        return True
+    return (isinstance(n, ast.Attribute) and (
+        (isinstance(n.value, ast.Name) and n.value.id in _ENUMS)
+        or (isinstance(n.value, ast.Attribute) and n.value.attr in _ENUMS)))
+
+
+def _eqv_norm(tree):
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Compare):
+            ops, prev = [], node.left
+            for op, cmp in zip(node.ops, node.comparators):
+                if _identity_safe(prev) or _identity_safe(cmp):
+                    if isinstance(op, ast.Eq):
+                        op = ast.Is()
+                    elif isinstance(op, ast.NotEq):
+                        op = ast.IsNot()
+                ops.append(op)
+                prev = cmp
+            node.ops = ops
+    return ast.dump(tree)
+
+
+def _eqv_only(old_text, new_text):
+    """True when the two modules differ only by '=='/'is' (or '!='/'is not') swaps
+    whose other side is None or a sqlglot enum member: those behave the same."""
+    try:
+        a, b = ast.parse(old_text), ast.parse(new_text)
+    except SyntaxError:
+        return False
+    if ast.dump(a) == ast.dump(b):
+        return False
+    return _eqv_norm(a) == _eqv_norm(b)
+
+
 def select(patch_text, mp, why):
     sel = 0
     pending = []  # class-body changes: (file, class, its users)
@@ -689,6 +730,9 @@ def select(patch_text, mp, why):
             t = mp.importers(old)
             sel |= t
             why.append(f"{old}: does not compile ({type(e).__name__}) -> importers {count(t)}")
+            continue
+        if _eqv_only(old_text, new_text):
+            why.append(f"{old}: only is/== swaps against None or an enum member -> none")
             continue
         patched[old] = new_text
         old_lines, new_lines = old_text.split("\n"), new_text.split("\n")

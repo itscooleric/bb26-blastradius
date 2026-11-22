@@ -623,9 +623,7 @@ DOC_SUFFIXES = (".md", ".rst", ".txt", ".png", ".gif", ".jpg", ".svg", ".jinja2"
 DOC_FILES = {"LICENSE", ".gitignore", ".gitpod.yml", ".pre-commit-config.yaml", "MANIFEST.in", "Makefile", "CHANGELOG.md"}
 
 
-_ENUMS = {"TrieResult", "IsPredicatePrecedence", "TokenType", "AutoName", "Dialects",
-          "NormalizationStrategy", "UsingColumnOrder", "AliasPrecedence", "DType",
-          "PropertiesLocation", "ScopeType", "ErrorLevel"}
+_ENUMS = {"TrieResult", "IsPredicatePrecedence", "AutoName", "DType", "PropertiesLocation", "ScopeType", "ErrorLevel"}  # plain Enums only: no str or int mix-ins
 
 
 def _identity_safe(n):
